@@ -854,7 +854,8 @@ def _enable_dark_app_mode() -> None:
 def run() -> int:
     _enable_dark_app_mode()
     root = tk.Tk()
-    # 走到这里说明 Tk 初始化成功，再把随 exe 一起出现的控制台窗口藏起来
+    ZEEloadApp(root)
+    # 完整界面创建成功后再隐藏控制台，避免初始化异常时连报错也看不到。
     if os.name == "nt" and FROZEN:
         try:
             import ctypes
@@ -864,7 +865,6 @@ def run() -> int:
                 ctypes.windll.user32.ShowWindow(hwnd, 0)
         except Exception:
             pass
-    ZEEloadApp(root)
     root.mainloop()
     return 0
 

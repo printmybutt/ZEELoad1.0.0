@@ -18,7 +18,9 @@ Set-Location $root
 
 Write-Host '== 安装依赖 =='
 python -m pip install -U pip
+if ($LASTEXITCODE -ne 0) { throw "pip update failed (exit $LASTEXITCODE)." }
 python -m pip install -U mitmproxy pydivert pyinstaller
+if ($LASTEXITCODE -ne 0) { throw "Dependency installation failed (exit $LASTEXITCODE)." }
 
 $addon = (Join-Path $root '..\addons\zeekr_log.py')
 $icon  = (Join-Path $root '..\assets\zeeload.ico')
@@ -44,6 +46,12 @@ if ($OneFile) { $pyiArgs = @('--onefile') + $pyiArgs }
 
 Write-Host '== 开始打包 =='
 python -m PyInstaller @pyiArgs
+if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed (exit $LASTEXITCODE)." }
+
+$expectedExe = if ($OneFile) { Join-Path $root 'dist\ZEELoad.exe' } else { Join-Path $root 'dist\ZEELoad\ZEELoad.exe' }
+if (-not (Test-Path -LiteralPath $expectedExe -PathType Leaf)) {
+  throw "Build output not found: $expectedExe"
+}
 
 if ($OneFile) {
   Write-Host "完成：$root\dist\ZEELoad.exe"

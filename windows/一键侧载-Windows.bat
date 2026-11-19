@@ -31,13 +31,20 @@ pause
 exit /b 1
 
 :runpy
-python "%~dp0win_sideload.py" --apk "%APK%"
-goto :done
+set "ZEELOAD_PYTHON=python"
+goto :runlogged
 
 :runpylauncher
-py "%~dp0win_sideload.py" --apk "%APK%"
+set "ZEELOAD_PYTHON=py"
+
+:runlogged
+set "ZEELOAD_ENTRY=%~dp0zeeload_app.py"
+set "ZEELOAD_APK=%APK%"
+set "ZEELOAD_LOGDIR=%~dp0logs"
+powershell -NoProfile -Command "$ErrorActionPreference = 'Continue'; New-Item -ItemType Directory -Force -Path $env:ZEELOAD_LOGDIR -ErrorAction Stop | Out-Null; $taskLog = Join-Path $env:ZEELOAD_LOGDIR ('bat-run-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log'); Write-Host ('Log: ' + $taskLog); & $env:ZEELOAD_PYTHON -u $env:ZEELOAD_ENTRY --apk $env:ZEELOAD_APK 2>&1 | Tee-Object -FilePath $taskLog; $taskExit = $LASTEXITCODE; Write-Host ('Log saved: ' + $taskLog); exit $taskExit"
+set "ZEELOAD_EXIT=%errorlevel%"
 
 :done
 echo.
-echo Exit code: %errorlevel%
+echo Exit code: %ZEELOAD_EXIT%
 pause

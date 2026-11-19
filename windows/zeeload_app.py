@@ -11,7 +11,11 @@
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 import sys
+import tempfile
+import traceback
 
 
 def main() -> int:
@@ -36,5 +40,39 @@ def main() -> int:
     return run()
 
 
+def launch() -> int:
+    """记录入口异常，双击启动失败时也能找到原因。"""
+    try:
+        return main()
+    except Exception:
+        details = traceback.format_exc()
+        base = Path(sys.executable if getattr(sys, "frozen", False) else __file__).resolve().parent
+        fallback = Path(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()) / "ZEEload"
+        report = None
+        for directory in (base / "logs", fallback / "logs"):
+            try:
+                directory.mkdir(parents=True, exist_ok=True)
+                report_path = directory / "startup-error.log"
+                with report_path.open("a", encoding="utf-8") as stream:
+                    stream.write(f"\nPython: {sys.version}\nExecutable: {sys.executable}\n{details}")
+                report = report_path
+                break
+            except OSError:
+                continue
+        message = f"ZEEload 启动失败。\n日志：{report or '无法写入日志，请从终端启动查看报错'}\n\n{details}"
+        try:
+            print(message, file=sys.stderr, flush=True)
+        except (OSError, UnicodeError):
+            pass
+        if sys.platform == "win32" and (len(sys.argv) == 1 or sys.argv[1] == "--gui"):
+            try:
+                import ctypes
+
+                ctypes.windll.user32.MessageBoxW(None, message, "ZEEload 启动失败", 0x10)
+            except Exception:
+                pass
+        return 1
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(launch())

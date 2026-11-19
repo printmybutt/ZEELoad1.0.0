@@ -111,7 +111,7 @@ def is_admin() -> bool:
 
 
 def find_hotspot_ip() -> str:
-    """找 Windows 热点（ICS）网卡地址。ICS 默认网段是 192.168.137.0/24。"""
+    """只自动选择默认 ICS 网段；其它私网地址可能是手机热点或 VPN 上游。"""
     candidates = []
     try:
         out = subprocess.check_output(["ipconfig"], text=True, errors="ignore")
@@ -130,10 +130,6 @@ def find_hotspot_ip() -> str:
             candidates.append(ip)
     for ip in candidates:
         if ip.startswith("192.168.137."):
-            return ip
-    for ip in candidates:
-        if ip.startswith(("192.168.", "10.", "172.16.", "172.17.", "172.18.", "172.19.",
-                          "172.2", "172.30.", "172.31.")):
             return ip
     return ""
 
@@ -672,7 +668,7 @@ def main() -> int:
         manual_ip = (args.hotspot_ip or "").strip()
         hotspot_ip = manual_ip or find_hotspot_ip()
         if not hotspot_ip:
-            log("找不到热点网卡 IP；请先开启「移动热点」，或用 --hotspot-ip 指定。")
+            log("未找到默认 ICS 热点网卡；请先开启「移动热点」。自定义网段请用 --hotspot-ip 指定热点侧地址。")
             return 5
         log(f"热点网卡 IP：{hotspot_ip or '未找到'}{'（手动指定）' if manual_ip else '（自动探测）'}")
         if not is_admin():
@@ -730,7 +726,8 @@ def main() -> int:
             while True:
                 time.sleep(1)
         if not hotspot_ip:
-            log("找不到热点网卡 IP；请先在 Windows 设置里开启「移动热点」并让车机连上。")
+            log("未找到默认 ICS 热点网卡；请先在 Windows 设置里开启「移动热点」并让车机连上，再重新运行。")
+            log("不会把连接手机热点的上网网卡当作车机热点；自定义网段请用 --hotspot-ip 指定热点侧地址。")
             return 5
         log("开始透明重定向（Ctrl-C 停止）")
         run_divert(hotspot_ip, block_quic=not args.allow_quic)
