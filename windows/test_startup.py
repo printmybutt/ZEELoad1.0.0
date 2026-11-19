@@ -126,5 +126,31 @@ class ObserveOnlyTests(unittest.TestCase):
         self.assertNotIn('old.apk', command)
 
 
+@unittest.skipUnless(sys.platform == 'win32', 'Windows CMD launcher regression')
+class BatchEntryTests(unittest.TestCase):
+    def test_batch_files_preserve_crlf_for_zip_downloads(self):
+        for path in Path(__file__).parent.glob('*.bat'):
+            with self.subTest(path=path.name):
+                raw = path.read_bytes()
+                self.assertNotIn(b'\n', raw.replace(b'\r\n', b''))
+                self.assertIn(b'\r\n', raw)
+
+    def test_observe_entry_reaches_child_in_cmd_with_unicode_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory) / 'launcher 中文 test'
+            folder.mkdir()
+            entry = folder / 'observe-Windows.bat'
+            entry.write_bytes(Path(__file__).with_name('observe-Windows.bat').read_bytes())
+            (folder / '一键侧载-Windows.bat').write_bytes(
+                b'@echo off\r\necho WRAPPER_OK %*\r\nexit /b 23\r\n')
+            process = subprocess.run(['cmd.exe', '/d', '/c', str(entry)],
+                                     capture_output=True, stdin=subprocess.DEVNULL, timeout=15)
+            output = (process.stdout + process.stderr).decode('utf-8', 'replace')
+            self.assertIn('WRAPPER_OK --observe-only', output)
+            self.assertIn('Observation launcher failed. Exit code: 23', output)
+            self.assertNotIn('not recognized', output)
+            self.assertEqual(process.returncode, 23)
+
+
 if __name__ == "__main__":
     unittest.main()

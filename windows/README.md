@@ -33,6 +33,7 @@ EXE 界面创建失败时，会尝试弹出错误并写入 EXE 同目录的 `log
 ### 观察更新检查或开发者入口
 
 双击 `observe-Windows.bat`，无需选择 APK。该模式仍使用代理和透明转发，但不改写更新元数据、签名响应或 APK 内容。
+请完整解压项目后运行。Windows BAT 以 CRLF 换行发布；观察入口启动失败时会保留错误并等待按键。
 日志、请求记录和保存的响应体位于 `windows/logs/observe/`，与安装测试分开保存。
 先开启热点并确认车机联网，然后运行观察入口，在车机上触发一次待分析的操作，提示出现后按 Ctrl-C 停止。
 例如场景工坊隐藏入口会请求 `/scenario-management-service/api/v1/scenario/template/enable-developer`；
