@@ -95,6 +95,7 @@ class ObserveOnlyTests(unittest.TestCase):
         process = Mock()
         process.poll.return_value = None
         with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / 'requests.jsonl').touch()
             with (
                 patch.object(win_sideload.sys, 'argv', ['win_sideload.py', '--observe-only', '--out', directory]),
                 patch.object(win_sideload, 'ensure_python', return_value=None),
@@ -110,7 +111,26 @@ class ObserveOnlyTests(unittest.TestCase):
             start.assert_called_once_with('', '', '', '', directory, emudhra_old=False, observe_only=True)
             process.terminate.assert_called_once()
 
+    def test_observation_stops_when_structured_capture_did_not_start(self):
+        process = Mock()
+        process.poll.return_value = None
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                patch.object(win_sideload.sys, 'argv', ['win_sideload.py', '--observe-only', '--out', directory]),
+                patch.object(win_sideload, 'ensure_python', return_value=None),
+                patch.object(win_sideload, 'IS_WINDOWS', True),
+                patch.object(win_sideload, 'is_admin', return_value=True),
+                patch.object(win_sideload.time, 'sleep'),
+                patch.object(win_sideload, 'start_mitmdump', return_value=process),
+                patch.object(win_sideload, 'run_divert') as divert,
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                self.assertEqual(win_sideload.main(), 9)
+            process.terminate.assert_called_once()
+            divert.assert_not_called()
+
     def test_observation_disables_cached_mutation_options(self):
+        names = win_sideload.addon_option_names()
         with (
             patch.object(win_sideload, 'find_mitmdump', return_value=['mitmdump.exe']),
             patch.object(win_sideload, 'FROZEN', False),
@@ -120,10 +140,47 @@ class ObserveOnlyTests(unittest.TestCase):
         ):
             win_sideload.start_mitmdump('old.apk', 'ALL', 'a' * 64, 'b' * 32, 'logs', observe_only=True)
         command = popen.call_args.args[0]
-        for setting in ('replace_apk=', 'inject_pkg=', 'override_sha256=', 'override_md5=',
-                        'fake_hash=false', 'fake_sign=false', 'corrupt_offset=-1'):
+        for setting in (names['replace_apk'] + '=', names['inject_pkg'] + '=',
+                        names['override_sha256'] + '=', names['override_md5'] + '=',
+                        names['fake_hash'] + '=false', names['fake_sign'] + '=false',
+                        names['corrupt_offset'] + '=-1'):
             self.assertIn(setting, command)
         self.assertNotIn('old.apk', command)
+
+
+class AddonCompatibilityTests(unittest.TestCase):
+    def test_legacy_addon_receives_its_declared_output_and_mutation_options(self):
+        names = ('zeekr_out', 'zeekr_hosts', 'zeekr_inject_pkg', 'zeekr_replace_apk',
+                 'zeekr_override_sha256', 'zeekr_override_md5', 'zeekr_fake_hash',
+                 'zeekr_fake_sign', 'zeekr_corrupt_offset')
+        with tempfile.TemporaryDirectory() as directory:
+            addon = Path(directory) / 'legacy.py'
+            addon.write_text('def load(loader):\n' + ''.join(
+                f'    loader.add_option({name!r}, str, "", "")\n' for name in names), encoding='utf-8')
+            with (
+                patch.object(win_sideload, 'ADDON', str(addon)),
+                patch.object(win_sideload, 'find_mitmdump', return_value=['mitmdump.exe']),
+                patch.object(win_sideload, 'FROZEN', False),
+                patch.object(win_sideload, 'mitmproxy_version', return_value=(12, 3)),
+                patch.object(win_sideload.subprocess, 'Popen') as popen,
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                win_sideload.start_mitmdump('', '', '', '', directory, observe_only=True)
+            command = popen.call_args.args[0]
+            self.assertIn('zeekr_out=' + directory, command)
+            self.assertIn('zeekr_hosts=zeekrlife.com,ecarx.com', command)
+            self.assertIn('zeekr_fake_hash=false', command)
+            self.assertIn('zeekr_fake_sign=false', command)
+            self.assertIn('zeekr_corrupt_offset=-1', command)
+            self.assertNotIn('out_dir=' + directory, command)
+
+    def test_unknown_addon_schema_fails_instead_of_silently_losing_logs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            addon = Path(directory) / 'unknown.py'
+            addon.write_text('pass\n', encoding='utf-8')
+            with patch.object(win_sideload, 'ADDON', str(addon)):
+                with self.assertRaisesRegex(RuntimeError, 'out_dir'):
+                    win_sideload.addon_option_names()
 
 
 @unittest.skipUnless(sys.platform == 'win32', 'Windows CMD launcher regression')

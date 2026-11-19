@@ -402,6 +402,7 @@ class ZeekrLog:
             os.path.join(out, "requests.jsonl"), "a", encoding="utf-8", buffering=1
         )
         self._opened = True
+        ctx.log.warn(f"[capture-ready] 完整请求与响应索引：{os.path.join(out, 'requests.jsonl')}")
 
     def _ensure_open(self) -> bool:
         if not self._opened:
@@ -412,6 +413,8 @@ class ZeekrLog:
         assert self._jsonl is not None
         try:
             self._jsonl.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            if rec.get("url"):
+                ctx.log.warn(f"[capture-url] {rec.get('method', '')} {rec['url']} -> {rec.get('status', '')}")
         except Exception as exc:  # 记录失败不应中断代理
             ctx.log.warn(f"zeekr_log: 写入 requests.jsonl 失败: {exc}")
 

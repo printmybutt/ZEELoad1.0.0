@@ -301,6 +301,32 @@ def mitmproxy_version(exe: list[str]) -> tuple[int, int] | None:
     return None
 
 
+def addon_option_names() -> dict[str, str]:
+    """读取插件声明，兼容旧 zeekr_* 与新参数名，避免选项被静默忽略。"""
+    import ast
+
+    with open(ADDON, encoding="utf-8-sig") as stream:
+        tree = ast.parse(stream.read(), filename=ADDON)
+    declared = {
+        node.args[0].value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "add_option" and node.args
+        and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str)
+    }
+    result = {}
+    for name in ("out_dir", "hosts", "inject_pkg", "replace_apk", "override_sha256",
+                 "override_md5", "fake_hash", "fake_sign", "corrupt_offset"):
+        legacy = "zeekr_out" if name == "out_dir" else "zeekr_" + name
+        if name in declared:
+            result[name] = name
+        elif legacy in declared:
+            result[name] = legacy
+        else:
+            raise RuntimeError(f"日志插件缺少选项 {name}：{ADDON}")
+    return result
+
+
 def start_mitmdump(apk: str, pkg: str, sha: str, md5: str, outdir: str,
                    emudhra_old: bool = False, observe_only: bool = False) -> subprocess.Popen:
     if observe_only:
@@ -339,6 +365,7 @@ def start_mitmdump(apk: str, pkg: str, sha: str, md5: str, outdir: str,
     else:
         log(f"mitmproxy 版本：{ver[0]}.{ver[1]}")
 
+    names = addon_option_names()
     cmd = base + [
         "--mode", f"regular@{PROXY_PORT}",
         "--set", f"confdir={os.path.join(outdir, 'mitm-config')}",
@@ -349,16 +376,17 @@ def start_mitmdump(apk: str, pkg: str, sha: str, md5: str, outdir: str,
         # 上游慢的时候车机会在 TLS 握手阶段等到超时。
         "--set", "connection_strategy=lazy",
         "--set", "stream_large_bodies=2m",
-        "--set", f"out_dir={outdir}",
-        "--set", f"inject_pkg={pkg}",
-        "--set", f"replace_apk={apk}",
-        "--set", f"override_sha256={sha}",
-        "--set", f"override_md5={md5}",
+        "--set", f"{names['out_dir']}={outdir}",
+        "--set", f"{names['hosts']}=zeekrlife.com,ecarx.com",
+        "--set", f"{names['inject_pkg']}={pkg}",
+        "--set", f"{names['replace_apk']}={apk}",
+        "--set", f"{names['override_sha256']}={sha}",
+        "--set", f"{names['override_md5']}={md5}",
         "-s", os.path.abspath(ADDON),
     ]
     if observe_only:
-        cmd += ["--set", "fake_hash=false", "--set", "fake_sign=false",
-                "--set", "corrupt_offset=-1"]
+        cmd += ["--set", f"{names['fake_hash']}=false", "--set", f"{names['fake_sign']}=false",
+                "--set", f"{names['corrupt_offset']}=-1"]
     try:
         return subprocess.Popen(cmd, cwd=outdir)
     except FileNotFoundError:
@@ -728,6 +756,16 @@ def main() -> int:
     if mitm.poll() is not None:
         log("mitmproxy 启动失败，请确认 mitmproxy 安装正常（pip install -U mitmproxy）。")
         return 4
+    if args.observe_only:
+        capture_file = os.path.join(outdir, "requests.jsonl")
+        for _ in range(20):
+            if os.path.isfile(capture_file) or mitm.poll() is not None:
+                break
+            time.sleep(.25)
+        if not os.path.isfile(capture_file):
+            mitm.terminate()
+            log("观察记录未开启：没有生成 requests.jsonl，请保留启动日志排查插件参数。")
+            return 9
     log(f"mitmproxy 已启动，监听 127.0.0.1:{PROXY_PORT}")
 
     manual_ip = (args.hotspot_ip or "").strip()
