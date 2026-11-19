@@ -55,27 +55,31 @@ class StartupFailureTests(unittest.TestCase):
                        if line.startswith('powershell -NoProfile -Command "$ErrorActionPreference'))
         command = command.split(' -Command "', 1)[1][:-1]
         with tempfile.TemporaryDirectory() as directory:
-            task_dir = Path(directory) / "task's $ notes"
+            task_dir = Path(directory) / "task's $ 中文目录"
             task_dir.mkdir()
             entry = task_dir / "fake_entry.py"
             entry.write_text(
-                "import sys\nprint('stdout reached')\n"
-                "print(sys.argv[-1])\nprint('stderr reached', file=sys.stderr)\nsys.exit(9)\n",
+                "import sys\nprint('stdout reached：中文正常')\n"
+                "print(sys.argv[-1])\nprint('stderr reached：错误信息', file=sys.stderr)\nsys.exit(9)\n",
                 encoding="utf-8",
             )
-            apk = str(task_dir / "app's $ sample.apk")
+            apk = str(task_dir / "app's $ 测试应用.apk")
             environment = dict(os.environ, ZEELOAD_PYTHON=sys.executable,
                                ZEELOAD_ENTRY=str(entry), ZEELOAD_APK=apk,
                                ZEELOAD_LOGDIR=str(task_dir / "logs"))
-            result = subprocess.run(["powershell", "-NoProfile", "-Command", command],
+            legacy_console = "[Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(936); "
+            result = subprocess.run(["powershell", "-NoProfile", "-Command", legacy_console + command],
                                     env=environment, capture_output=True, timeout=30)
             self.assertEqual(result.returncode, 9, result.stdout + result.stderr)
             reports = list((task_dir / "logs").glob("bat-run-*.log"))
             self.assertEqual(len(reports), 1)
             report = reports[0].read_text(encoding="utf-16")
-            self.assertIn("stdout reached", report)
-            self.assertIn("stderr reached", report)
+            self.assertIn("stdout reached：中文正常", report)
+            self.assertIn("stderr reached：错误信息", report)
             self.assertIn(apk, report)
+            console = (result.stdout + result.stderr).decode("utf-8")
+            self.assertIn("stdout reached：中文正常", console)
+            self.assertIn("stderr reached：错误信息", console)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,8 @@
 @echo off
 setlocal
+chcp 65001 >nul
+set "PYTHONUTF8=1"
+set "PYTHONIOENCODING=utf-8"
 cd /d "%~dp0"
 
 net session >nul 2>&1
@@ -41,7 +44,7 @@ set "ZEELOAD_PYTHON=py"
 set "ZEELOAD_ENTRY=%~dp0zeeload_app.py"
 set "ZEELOAD_APK=%APK%"
 set "ZEELOAD_LOGDIR=%~dp0logs"
-powershell -NoProfile -Command "$ErrorActionPreference = 'Continue'; New-Item -ItemType Directory -Force -Path $env:ZEELOAD_LOGDIR -ErrorAction Stop | Out-Null; $taskLog = Join-Path $env:ZEELOAD_LOGDIR ('bat-run-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log'); Write-Host ('Log: ' + $taskLog); & $env:ZEELOAD_PYTHON -u $env:ZEELOAD_ENTRY --apk $env:ZEELOAD_APK 2>&1 | Tee-Object -FilePath $taskLog; $taskExit = $LASTEXITCODE; Write-Host ('Log saved: ' + $taskLog); exit $taskExit"
+powershell -NoProfile -Command "$ErrorActionPreference = 'Continue'; $taskUtf8 = New-Object System.Text.UTF8Encoding $false; [Console]::InputEncoding = $taskUtf8; [Console]::OutputEncoding = $taskUtf8; $OutputEncoding = $taskUtf8; $env:PYTHONUTF8 = '1'; $env:PYTHONIOENCODING = 'utf-8'; New-Item -ItemType Directory -Force -Path $env:ZEELOAD_LOGDIR -ErrorAction Stop | Out-Null; $taskLog = Join-Path $env:ZEELOAD_LOGDIR ('bat-run-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log'); Write-Host ('Log: ' + $taskLog); & $env:ZEELOAD_PYTHON -u $env:ZEELOAD_ENTRY --apk $env:ZEELOAD_APK 2>&1 | Tee-Object -FilePath $taskLog; $taskExit = $LASTEXITCODE; Write-Host ('Log saved: ' + $taskLog); exit $taskExit"
 set "ZEELOAD_EXIT=%errorlevel%"
 
 :done

@@ -21,6 +21,8 @@
 自定义 ICS 网段请用 `--hotspot-ip` 指定笔记本热点侧的实际地址。
 
 BAT 会把完整控制台输出保存到 `windows/logs/bat-run-时间.log`。
+BAT、Python 和 PowerShell 的控制台/管道统一使用 UTF-8，避免中文输出被按 GBK 误解码。
+Windows PowerShell 5.1 的 `Tee-Object` 日志文件仍为带 BOM 的 UTF-16，编辑器可自动识别。
 EXE 界面创建失败时，会尝试弹出错误并写入 EXE 同目录的 `logs/startup-error.log`；
 该目录不可写时，回退到 `%LOCALAPPDATA%/ZEEload/logs/`。
 若连日志也没有生成，可能失败在 Python 入口之前，需要从 PowerShell 启动 EXE 查看引导程序报错。
