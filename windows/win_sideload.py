@@ -387,6 +387,10 @@ def start_mitmdump(apk: str, pkg: str, sha: str, md5: str, outdir: str,
     if observe_only:
         cmd += ["--set", f"{names['fake_hash']}=false", "--set", f"{names['fake_sign']}=false",
                 "--set", f"{names['corrupt_offset']}=-1"]
+        upload_addon = resource_path(os.path.join("addons", "log_upload_capture.py"))
+        if not os.path.isfile(upload_addon):
+            raise RuntimeError(f"缺少上传保存组件，请完整解压新版项目：{upload_addon}")
+        cmd += ["-s", upload_addon, "--set", f"log_upload_dir={os.path.join(outdir, 'uploads')}"]
     try:
         return subprocess.Popen(cmd, cwd=outdir)
     except FileNotFoundError:

@@ -23,6 +23,7 @@ python -m pip install -U mitmproxy pydivert pyinstaller
 if ($LASTEXITCODE -ne 0) { throw "Dependency installation failed (exit $LASTEXITCODE)." }
 
 $addon = (Join-Path $root '..\addons\zeekr_log.py')
+$uploadAddon = (Join-Path $root 'addons\log_upload_capture.py')
 $icon  = (Join-Path $root '..\assets\zeeload.ico')
 $logo  = (Join-Path $root '..\assets\logo-128.png')
 
@@ -33,6 +34,7 @@ $pyiArgs = @(
   '--uac-admin',
   '--icon', $icon,
   '--add-data', "$addon;addons",
+  '--add-data', "$uploadAddon;addons",
   '--add-data', "$icon;.",
   '--add-data', "$logo;.",
   '--collect-all', 'mitmproxy',

@@ -44,6 +44,37 @@ EXE 界面创建失败时，会尝试弹出错误并写入 EXE 同目录的 `log
 
 命令行等价用法：`python zeeload_app.py --observe-only --out logs/observe`。
 
+### 保存异常反馈上传的日志副本
+
+观察模式会同时监听 `/file-service/api/v2/file/path/apply` 的响应，针对其中指向
+`snc-media-prod-oss.oss-cn-hangzhou.aliyuncs.com/remote-log/maintenance-testing-platform/DHU/` 的日志 ZIP，
+把实际经过代理的上传数据原样转发，并将完整分片另存到 `windows/logs/observe/uploads/任务编号/`。
+任务编号是散列值；本地分片索引不保存请求授权头或上传签名。
+
+先运行新版 `observe-Windows.bat`，看到 `[upload-capture-ready]` 后，再在车机发起一次异常反馈上传。
+收到申请响应后会出现 `[upload-plan]`；收到完整分片后出现 `[upload-saved]`，显示本地已保存数量。
+必须能解密 OSS 连接；若提示该域名 TLS 握手失败，只知道域名无法保存文件内容。
+旧版工具没保存的上传数据无法事后补回。网络上传失败时，已收到的完整分片仍会保留；
+车机未发送或未完整发送的分片仍会缺失，不能保证云端失败后本地一定完整。
+
+看到 `[upload-local-complete]` 后，停止观察工具，在 `windows` 目录的 PowerShell 运行：
+
+```powershell
+python .\assemble_upload.py ".\logs\observe\uploads\任务编号"
+```
+
+合并结果是任务目录中的 `captured-log.zip`。合并时检查缺片、每片大小和 SHA-256，并检查 ZIP 目录能否读取；
+缺片或校验失败会明确报错，不会输出一个标为完整的 ZIP。不会解压车机日志，也不会重放或代替车机完成云端上传。
+观察结束后再合并，避免与正在写入的分片冲突。对于约 5 GB 的日志，建议至少留出 **12 GB 硬盘空间**，
+因为需要同时存放分片和合并结果；内存只存少量正在转发的数据块。保存完整后可自行整理分片。
+仅保存本次支持的 DHU 日志路径；不捕获其他应用的上传内容。
+若申请响应明确提供日志加密字段，另存本地 `encryption-metadata.json`，控制台不显示具体值；
+OSS 返回的服务端加密方式和密钥标识另存 `oss-encryption-metadata.json`。
+上传鉴权头与 ZIP 密钥是不同内容；没有返回的密钥无法凭空恢复。
+合并后会报告 ZIP 条目的标准加密标志，但无法据此排除 ZIP 内部文件另有加密。
+申请请求正文中明确出现的加密字段也会保存。若完整数据无法读取 ZIP 目录，将保留为
+`captured-log.bin` 供继续识别，不会因为可能存在外层加密而丢弃本地副本。
+
 | 项目 | 要求 |
 |---|---|
 | 系统 | Windows 10 / 11（x64） |
