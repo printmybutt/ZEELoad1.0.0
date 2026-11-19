@@ -302,7 +302,9 @@ def mitmproxy_version(exe: list[str]) -> tuple[int, int] | None:
 
 
 def start_mitmdump(apk: str, pkg: str, sha: str, md5: str, outdir: str,
-                   emudhra_old: bool = False) -> subprocess.Popen:
+                   emudhra_old: bool = False, observe_only: bool = False) -> subprocess.Popen:
+    if observe_only:
+        apk = pkg = sha = md5 = ""
     base = find_mitmdump()
     if base[0] == sys.executable and not FROZEN:
         # 回退到当前解释器时，先确认它装了 mitmproxy
@@ -347,13 +349,16 @@ def start_mitmdump(apk: str, pkg: str, sha: str, md5: str, outdir: str,
         # 上游慢的时候车机会在 TLS 握手阶段等到超时。
         "--set", "connection_strategy=lazy",
         "--set", "stream_large_bodies=2m",
-        "--set", f"zeekr_out={outdir}",
-        "--set", f"zeekr_inject_pkg={pkg}",
-        "--set", f"zeekr_replace_apk={apk}",
-        "--set", f"zeekr_override_sha256={sha}",
-        "--set", f"zeekr_override_md5={md5}",
+        "--set", f"out_dir={outdir}",
+        "--set", f"inject_pkg={pkg}",
+        "--set", f"replace_apk={apk}",
+        "--set", f"override_sha256={sha}",
+        "--set", f"override_md5={md5}",
         "-s", os.path.abspath(ADDON),
     ]
+    if observe_only:
+        cmd += ["--set", "fake_hash=false", "--set", "fake_sign=false",
+                "--set", "corrupt_offset=-1"]
     try:
         return subprocess.Popen(cmd, cwd=outdir)
     except FileNotFoundError:
@@ -651,7 +656,9 @@ def main() -> int:
         return rc
 
     ap = argparse.ArgumentParser()
-    ap.add_argument("--apk", default="", help="要安装的 APK 路径")
+    target = ap.add_mutually_exclusive_group()
+    target.add_argument("--apk", default="", help="要安装的 APK 路径")
+    target.add_argument("--observe-only", action="store_true", help="仅记录流量，不注入更新或替换 APK；无需 --apk")
     ap.add_argument("--pkg", default="ALL", help="注入目标包名，或 ALL")
     ap.add_argument("--out", default="logs", help="日志/flow 输出目录")
     ap.add_argument("--proxy-only", action="store_true", help="只起 HTTP 代理，不做透明重定向")
@@ -676,29 +683,35 @@ def main() -> int:
             return 3
         return sniff_clients(hotspot_ip, max(5, args.sniff))
 
-    if not args.apk:
+    if not args.apk and not args.observe_only:
         log("缺少 --apk：请指定要安装的 APK 路径（或直接双击运行图形界面）。")
         return 2
-    apk = os.path.abspath(args.apk)
-    if not os.path.isfile(apk):
-        log(f"APK 不存在：{apk}")
-        return 2
-    with open(apk, "rb") as fh:
-        blob = fh.read()
-    size = len(blob)
-    sha = hashlib.sha256(blob).hexdigest()
-    md5 = hashlib.md5(blob).hexdigest()
+    apk = sha = md5 = ""
+    size = 0
+    if not args.observe_only:
+        apk = os.path.abspath(args.apk)
+        if not os.path.isfile(apk):
+            log(f"APK 不存在：{apk}")
+            return 2
+        with open(apk, "rb") as fh:
+            blob = fh.read()
+        size = len(blob)
+        sha = hashlib.sha256(blob).hexdigest()
+        md5 = hashlib.md5(blob).hexdigest()
     outdir = os.path.abspath(args.out)
     os.makedirs(outdir, exist_ok=True)
 
     log("=" * 60)
-    log("极载 ZEEload · Windows 版")
+    log("ZEEload · Windows 版")
     log(f"Python: {sys.version.split()[0]}  |  解释器: {sys.executable}")
-    log(f"APK   : {apk}")
-    log(f"大小  : {size} 字节（{size / 1048576:.2f} MiB）")
-    log(f"sha256: {sha}")
-    log(f"md5   : {md5}")
-    log(f"注入包: {args.pkg}")
+    if args.observe_only:
+        log("观察模式：记录请求与响应，关闭更新注入、APK 替换和数据破坏选项。")
+    else:
+        log(f"APK   : {apk}")
+        log(f"大小  : {size} 字节（{size / 1048576:.2f} MiB）")
+        log(f"sha256: {sha}")
+        log(f"md5   : {md5}")
+        log(f"注入包: {args.pkg}")
     log("=" * 60)
 
     if not IS_WINDOWS:
@@ -709,7 +722,8 @@ def main() -> int:
         log("需要管理员权限：请右键「以管理员身份运行」PowerShell 后再执行本脚本。")
         return 3
 
-    mitm = start_mitmdump(apk, args.pkg, sha, md5, outdir, emudhra_old=args.emudhra_old)
+    mitm = start_mitmdump(apk, "" if args.observe_only else args.pkg, sha, md5, outdir,
+                         emudhra_old=args.emudhra_old, observe_only=args.observe_only)
     time.sleep(3)
     if mitm.poll() is not None:
         log("mitmproxy 启动失败，请确认 mitmproxy 安装正常（pip install -U mitmproxy）。")

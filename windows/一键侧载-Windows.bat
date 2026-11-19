@@ -16,6 +16,12 @@ if %errorlevel% neq 0 (
   exit /b
 )
 
+set "ZEELOAD_OBSERVE_ONLY="
+if /i "%~1"=="--observe-only" (
+  set "ZEELOAD_OBSERVE_ONLY=1"
+  goto :choosepython
+)
+
 set "APK=%~1"
 if "%APK%"=="" set /p "APK=APK path: "
 
@@ -25,6 +31,7 @@ if not exist "%APK%" (
   exit /b 1
 )
 
+:choosepython
 where python >nul 2>&1
 if %errorlevel%==0 goto :runpy
 where py >nul 2>&1
@@ -44,7 +51,8 @@ set "ZEELOAD_PYTHON=py"
 set "ZEELOAD_ENTRY=%~dp0zeeload_app.py"
 set "ZEELOAD_APK=%APK%"
 set "ZEELOAD_LOGDIR=%~dp0logs"
-powershell -NoProfile -Command "$ErrorActionPreference = 'Continue'; $taskUtf8 = New-Object System.Text.UTF8Encoding $false; [Console]::InputEncoding = $taskUtf8; [Console]::OutputEncoding = $taskUtf8; $OutputEncoding = $taskUtf8; $env:PYTHONUTF8 = '1'; $env:PYTHONIOENCODING = 'utf-8'; New-Item -ItemType Directory -Force -Path $env:ZEELOAD_LOGDIR -ErrorAction Stop | Out-Null; $taskLog = Join-Path $env:ZEELOAD_LOGDIR ('bat-run-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log'); Write-Host ('Log: ' + $taskLog); & $env:ZEELOAD_PYTHON -u $env:ZEELOAD_ENTRY --apk $env:ZEELOAD_APK 2>&1 | Tee-Object -FilePath $taskLog; $taskExit = $LASTEXITCODE; Write-Host ('Log saved: ' + $taskLog); exit $taskExit"
+if "%ZEELOAD_OBSERVE_ONLY%"=="1" set "ZEELOAD_LOGDIR=%~dp0logs\observe"
+powershell -NoProfile -Command "$ErrorActionPreference = 'Continue'; $taskUtf8 = New-Object System.Text.UTF8Encoding $false; [Console]::InputEncoding = $taskUtf8; [Console]::OutputEncoding = $taskUtf8; $OutputEncoding = $taskUtf8; $env:PYTHONUTF8 = '1'; $env:PYTHONIOENCODING = 'utf-8'; New-Item -ItemType Directory -Force -Path $env:ZEELOAD_LOGDIR -ErrorAction Stop | Out-Null; $taskLog = Join-Path $env:ZEELOAD_LOGDIR ('bat-run-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log'); Write-Host ('Log: ' + $taskLog); $taskArgs = if ($env:ZEELOAD_OBSERVE_ONLY -eq '1') { @('--observe-only', '--out', $env:ZEELOAD_LOGDIR) } else { @('--apk', $env:ZEELOAD_APK) }; & $env:ZEELOAD_PYTHON -u $env:ZEELOAD_ENTRY @taskArgs 2>&1 | Tee-Object -FilePath $taskLog; $taskExit = $LASTEXITCODE; Write-Host ('Log saved: ' + $taskLog); exit $taskExit"
 set "ZEELOAD_EXIT=%errorlevel%"
 
 :done

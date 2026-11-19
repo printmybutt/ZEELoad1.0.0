@@ -30,6 +30,16 @@ EXE 界面创建失败时，会尝试弹出错误并写入 EXE 同目录的 `log
 出现「12 秒内没有捕获到任何车机 443 包」时，先核对日志中的热点 IP 和车机是否走笔记本 Wi-Fi。
 这个提示只表示没有匹配的流量，不能据此判断 CA 或 APK 安装是否有效。
 
+### 观察更新检查或开发者入口
+
+双击 `observe-Windows.bat`，无需选择 APK。该模式仍使用代理和透明转发，但不改写更新元数据、签名响应或 APK 内容。
+日志、请求记录和保存的响应体位于 `windows/logs/observe/`，与安装测试分开保存。
+先开启热点并确认车机联网，然后运行观察入口，在车机上触发一次待分析的操作，提示出现后按 Ctrl-C 停止。
+例如场景工坊隐藏入口会请求 `/scenario-management-service/api/v1/scenario/template/enable-developer`；
+需要检查它的实际 HTTP 状态与响应正文，才能区分网络异常、登录失效和业务拒绝。
+
+命令行等价用法：`python zeeload_app.py --observe-only --out logs/observe`。
+
 | 项目 | 要求 |
 |---|---|
 | 系统 | Windows 10 / 11（x64） |
